@@ -1,0 +1,976 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Bro 3D Chess Game</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    :root {
+      --bg-dark: #020617;
+      --accent: #38bdf8;
+      --gold: #facc15;
+      --glass: rgba(15,23,42,0.9);
+      --light-square: #f0d9b5;
+      --dark-square: #b58863;
+    }
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body{
+      min-height:100vh; padding:16px;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background:
+        radial-gradient(circle at 0% 0%, #1f2937 0, #020617 50%),
+        radial-gradient(circle at 100% 100%, #0f172a 0, #020617 60%);
+      color:#e5e7eb;
+      display:flex; flex-direction:column; align-items:center; gap:10px;
+      position:relative;
+      overflow-x:hidden;
+    }
+
+    /* ===== Header (Game name + Coins) ===== */
+    .top-bar{
+      width:100%; max-width:400px;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:8px 12px;
+      border-radius:16px;
+      background:linear-gradient(135deg,#020617,#111827);
+      box-shadow:0 10px 25px rgba(0,0,0,.7),
+                 inset 0 0 0 1px rgba(148,163,184,.25);
+    }
+    .game-title{
+      font-size:16px;
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      background:linear-gradient(120deg,#e5e7eb,#facc15,#38bdf8);
+      -webkit-background-clip:text;
+      color:transparent;
+      text-shadow:0 2px 8px rgba(0,0,0,.7);
+      animation:titleGlow 2.4s ease-in-out infinite alternate;
+      white-space:nowrap;
+    }
+    @keyframes titleGlow{
+      0%{ text-shadow:0 0 8px rgba(250,204,21,.5); transform:translateY(0); }
+      100%{ text-shadow:0 0 16px rgba(56,189,248,1); transform:translateY(-1px); }
+    }
+    .coin-box{
+      display:flex; align-items:center; gap:6px;
+      padding:4px 10px;
+      border-radius:999px;
+      background:rgba(15,23,42,.9);
+      box-shadow:0 0 12px rgba(250,204,21,.3);
+      font-size:11px;
+    }
+    .coin-icon{
+      font-size:16px;
+      filter:drop-shadow(0 0 4px rgba(250,204,21,.9));
+    }
+    .coin-value{
+      font-variant-numeric:tabular-nums;
+      font-weight:600;
+      color:#facc15;
+    }
+
+    .subtitle{ font-size:11px; text-transform:uppercase; color:#9ca3af; letter-spacing:.18em; }
+
+    .vs-text{
+      font-size:13px;
+      text-transform:uppercase;
+      letter-spacing:.18em;
+      margin-top:4px;
+      opacity:.9;
+    }
+
+    .board-shell{ width:360px; max-width:95vw; perspective:900px; }
+    .board-frame{
+      width:100%; padding:10px; border-radius:20px;
+      background: linear-gradient(135deg,#020617,#111827);
+      box-shadow:0 26px 40px rgba(0,0,0,.95), inset 0 0 0 1px rgba(148,163,184,.25);
+      transform: rotateX(12deg); transform-origin:center top;
+    }
+    .board{
+      width:100%; padding-bottom:100%; position:relative;
+      border-radius:14px; overflow:hidden;
+      box-shadow:0 14px 30px rgba(0,0,0,.95), inset 0 0 0 1px rgba(15,23,42,.9);
+      background:#d1d5db;
+    }
+
+    .square{
+      position:absolute; width:12.5%; height:12.5%;
+      display:flex; align-items:center; justify-content:center;
+      cursor:pointer; user-select:none;
+      transition: transform .08s ease-out, box-shadow .12s ease-out, filter .12s ease-out;
+      font-size:28px;
+    }
+    .square.light{ background:var(--light-square); }
+    .square.dark { background:var(--dark-square); }
+    .square:active{
+      transform:scale(.96);
+      box-shadow: inset 0 3px 10px rgba(0,0,0,.9);
+    }
+
+    .piece{
+      text-shadow:0 2px 4px rgba(0,0,0,.85),0 0 8px rgba(0,0,0,.8);
+    }
+    .piece.white{
+      color:#fefce8;
+      text-shadow:0 1px 2px rgba(0,0,0,.7),0 0 6px rgba(250,204,21,.9);
+    }
+    .piece.black{
+      color:#020617;
+      text-shadow:0 1px 1px rgba(255,255,255,.4),0 0 4px rgba(0,0,0,.9);
+    }
+
+    .piece-img{
+      width:80%; height:80%; object-fit:contain;
+      background:none !important;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.85));
+      transition: transform .24s ease;
+    }
+    .piece-img.white-side{
+      filter: brightness(2) contrast(1.1) saturate(.1)
+              drop-shadow(0 2px 4px rgba(0,0,0,.9));
+    }
+    .piece-img.black-side{
+      filter: brightness(.9) contrast(1.2)
+              drop-shadow(0 2px 4px rgba(0,0,0,1));
+    }
+
+    .selected{
+      outline:3px solid var(--gold);
+      outline-offset:-3px;
+      filter:brightness(1.05);
+    }
+    .last-move{
+      box-shadow:
+        inset 0 0 0 3px #34d399,
+        0 0 14px rgba(34,197,94,.9);
+    }
+    .hint-move{ box-shadow: inset 0 0 0 3px rgba(56,189,248,.9); }
+    .hint-capture{ box-shadow: inset 0 0 0 3px rgba(248,113,113,.95); }
+
+    .illegal{ animation: shake .18s; }
+    @keyframes shake{
+      0%{transform:translateX(0)}
+      25%{transform:translateX(-3px)}
+      50%{transform:translateX(3px)}
+      75%{transform:translateX(-2px)}
+      100%{transform:translateX(0)}
+    }
+
+    .panel{
+      width:100%; max-width:360px;
+      background:var(--glass);
+      padding:10px 14px; border-radius:16px;
+      box-shadow:0 16px 30px rgba(0,0,0,.9),
+                 inset 0 0 0 1px rgba(148,163,184,.2);
+      backdrop-filter:blur(14px);
+    }
+    .panel-header{
+      display:flex; justify-content:space-between;
+      align-items:baseline; margin-bottom:4px;
+    }
+    .label{
+      font-size:10px; color:#9ca3af;
+      text-transform:uppercase; letter-spacing:.18em;
+    }
+    .status-text{ font-size:13px; }
+
+    .panel-buttons{
+      display:flex; flex-wrap:wrap;
+      gap:6px; margin-top:6px; margin-bottom:4px;
+    }
+
+    button{
+      background: linear-gradient(135deg,#3b82f6,#2563eb);
+      color:#fff; border:none; padding:5px 11px;
+      border-radius:999px; font-size:11px;
+      box-shadow:0 4px 10px rgba(37,99,235,.7);
+      cursor:pointer;
+      white-space:nowrap;
+    }
+    button.small{ font-size:10px; padding:4px 9px; }
+
+    #movesList{
+      max-height:120px; overflow-y:auto;
+      font-size:11px; line-height:1.4;
+    }
+    .move-row{ display:flex; gap:6px; }
+    .move-index{ width:24px; color:#9ca3af; }
+
+    .about-text{
+      font-size:11px;
+      line-height:1.5;
+      margin-top:4px;
+    }
+
+    /* Friends / Invite */
+    .friend-row{
+      display:flex; align-items:center; justify-content:space-between;
+      margin-bottom:4px;
+      font-size:11px;
+    }
+    .friend-info{
+      display:flex; align-items:center; gap:6px;
+    }
+    .friend-avatar{
+      width:22px; height:22px; border-radius:999px;
+      background:linear-gradient(135deg,#4b5563,#020617);
+      display:flex; align-items:center; justify-content:center;
+      font-size:11px;
+    }
+    .friend-status{
+      font-size:10px;
+      color:#22c55e;
+    }
+
+    /* Intro Overlay (start screen with login) */
+    #introOverlay{
+      position:fixed;
+      inset:0;
+      background:radial-gradient(circle at 20% 0%, #1f2937, #020617 55%);
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      z-index:50;
+      padding:20px;
+    }
+    .intro-title{
+      font-size:22px;
+      letter-spacing:.2em;
+      text-transform:uppercase;
+      text-align:center;
+      background:linear-gradient(120deg,#e5e7eb,#facc15,#38bdf8);
+      -webkit-background-clip:text;
+      color:transparent;
+      text-shadow:0 0 16px rgba(56,189,248,.9);
+      animation:introPop 1.4s ease-out forwards;
+    }
+    @keyframes introPop{
+      0%{ transform:scale(.7); opacity:0; }
+      60%{ transform:scale(1.1); opacity:1; }
+      100%{ transform:scale(1); }
+    }
+    .intro-sub{
+      margin-top:8px;
+      font-size:11px;
+      letter-spacing:.16em;
+      text-transform:uppercase;
+      color:#9ca3af;
+      text-align:center;
+    }
+    .intro-login-buttons{
+      margin-top:14px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      width:100%;
+      max-width:260px;
+    }
+    .intro-login-buttons button{
+      width:100%;
+      justify-content:flex-start;
+      display:flex;
+      align-items:center;
+      gap:8px;
+      padding:8px 10px;
+      border-radius:999px;
+      font-size:12px;
+      border:none;
+      box-shadow:0 4px 10px rgba(0,0,0,.4);
+    }
+    /* Facebook style */
+    #introFacebookBtn{
+      background:#1877f2;
+      color:#ffffff;
+    }
+    /* Google style */
+    #introGoogleBtn{
+      background:#ffffff;
+      color:#111827;
+    }
+    /* Twitter style */
+    #introTwitterBtn{
+      background:#000000;
+      color:#ffffff;
+    }
+
+    .intro-foot{
+      margin-top:14px;
+      font-size:10px;
+      color:#6b7280;
+      text-align:center;
+    }
+
+    /* Video overlay */
+    #videoOverlay{
+      position:fixed;
+      inset:0;
+      background:rgba(15,23,42,.9);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index:40;
+      padding:16px;
+    }
+    #videoBox{
+      width:100%; max-width:360px;
+      background:#020617;
+      border-radius:16px;
+      padding:10px;
+      box-shadow:0 20px 40px rgba(0,0,0,.9);
+    }
+    #localVideo{
+      width:100%;
+      border-radius:12px;
+      background:#000;
+    }
+    .video-head{
+      font-size:12px;
+      margin-bottom:6px;
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+    }
+  </style>
+</head>
+<body>
+  <!-- Intro / Login first screen -->
+  <div id="introOverlay">
+    <div class="intro-title">Bro 3D Chess Game</div>
+    <div class="intro-sub">Login karke game mein enter karo</div>
+    <div class="intro-login-buttons">
+      <button id="introFacebookBtn">
+        🔵 Facebook se Login
+      </button>
+      <button id="introGoogleBtn">
+        🟢 Google se Login
+      </button>
+      <button id="introTwitterBtn">
+        ⚪ Twitter se Login
+      </button>
+    </div>
+    <div class="intro-foot">
+      Login button dabane par game open ho jayega<br>
+      aur asli login page nayi tab mein open hoga.
+    </div>
+  </div>
+
+  <!-- Video overlay -->
+  <div id="videoOverlay">
+    <div id="videoBox">
+      <div class="video-head">
+        <span>Video Call (Local Camera)</span>
+        <button id="closeVideoBtn" class="small">Band karo</button>
+      </div>
+      <video id="localVideo" autoplay playsinline></video>
+      <div style="margin-top:6px;font-size:10px;color:#9ca3af;">
+        Ye abhi tumhara khud ka camera preview hai.<br>
+        Online doosre log se connect karne ke liye baad mein server lagega.
+      </div>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <div class="top-bar">
+    <div class="game-title">Bro 3D Chess Game</div>
+    <div class="coin-box">
+      <span class="coin-icon">🪙</span>
+      <span style="font-size:10px;">Bro Coin</span>
+      <span id="coinValue" class="coin-value">0</span>
+    </div>
+  </div>
+
+  <div class="subtitle">Your 3D Pieces • Local & Vs Bot</div>
+  <div class="vs-text" id="vsText">Player 1 vs Player 2</div>
+
+  <div style="margin-top:4px;margin-bottom:4px;">
+    <button id="modeBtn" class="small">Mode: 2P</button>
+  </div>
+
+  <!-- Chess board -->
+  <div class="board-shell">
+    <div class="board-frame">
+      <div id="board" class="board"></div>
+    </div>
+  </div>
+
+  <!-- Status / Controls -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="label">Status</div>
+      <div class="label">VS Start</div>
+    </div>
+    <div id="status" class="status-text">White to move</div>
+
+    <div class="panel-buttons" style="margin-top:8px;">
+      <button id="resetBtn">New Game</button>
+      <button id="undoBtn" class="small">Undo</button>
+      <button id="pieceBtn" class="small">Pieces: 3D</button>
+      <button id="hintBtn" class="small">Hints: ON</button>
+      <button id="soundBtn" class="small">Sound: ON</button>
+      <button id="bestMoveBtn" class="small">Best Move</button>
+      <button id="flipBtn" class="small">Flip</button>
+    </div>
+
+    <div class="panel-header" style="margin-top:6px;">
+      <div class="label">Moves</div>
+    </div>
+    <div id="movesList">No moves yet</div>
+  </div>
+
+  <!-- Friends / Invite / Voice / Chat / Video -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="label">Friends & Invite</div>
+    </div>
+    <div class="about-text">
+      <div style="margin-bottom:6px;">Friends Online:</div>
+
+      <div class="friend-row">
+        <div class="friend-info">
+          <div class="friend-avatar">A</div>
+          <div>
+            <div style="font-size:11px;">Ankit</div>
+            <div class="friend-status">Online</div>
+          </div>
+        </div>
+        <button class="small inviteFriendBtn" data-name="Ankit">Invite</button>
+      </div>
+
+      <div class="friend-row">
+        <div class="friend-info">
+          <div class="friend-avatar">R</div>
+          <div>
+            <div style="font-size:11px;">Rahul</div>
+            <div class="friend-status" style="color:#f97316;">In Match</div>
+          </div>
+        </div>
+        <button class="small inviteFriendBtn" data-name="Rahul">Invite</button>
+      </div>
+
+      <div style="margin-top:8px;">Room / Invite (PUBG style):</div>
+      <div style="margin-top:4px;display:flex;gap:6px;">
+        <input id="roomCodeInput" type="text" placeholder="Room Code..." style="flex:1;padding:6px;border-radius:8px;border:1px solid #374151;background:rgba(255,255,255,0.03);color:#e5e7eb;font-size:11px;">
+        <button id="createRoomBtn" class="small">Create</button>
+        <button id="inviteBtn" class="small">Share</button>
+      </div>
+      <div id="inviteStatus" style="margin-top:6px;font-size:10px;color:#9ca3af;">
+        Room code se tum friend ko bula sakte ho, ya random player jodh sakte ho.
+      </div>
+
+      <div style="margin-top:10px;">Chat & Call:</div>
+      <div class="panel-buttons" style="margin-top:4px;">
+        <button id="voiceChatBtn" class="small">Voice Chat</button>
+        <button id="chatBtn" class="small">Text Chat</button>
+        <button id="videoChatBtn" class="small">Video Call</button>
+      </div>
+    </div>
+  </div>
+
+  <audio id="moveSound" src="move-sound.mp3" preload="auto"></audio>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.min.js"></script>
+  <script>
+    const PIECES_UNICODE = {
+      "r":"♜","n":"♞","b":"♝","q":"♛","k":"♚","p":"♟",
+      "R":"♖","N":"♘","B":"♗","Q":"♕","K":"♔","P":"♙"
+    };
+    const pieceImages3D = {
+      "P":"pawns-image.jpg","p":"pawns-image.jpg",
+      "N":"knights-image.jpg","n":"knights-image.jpg",
+      "B":"bishops-image.jpg","b":"bishops-image.jpg",
+      "R":"rooks-image.jpg","r":"rooks-image.jpg",
+      "Q":"Queen-image.jpg","q":"Queen-image.jpg",
+      "K":"king-image.jpg","k":"king-image.jpg"
+    };
+
+    const boardEl = document.getElementById("board");
+    const statusEl = document.getElementById("status");
+    const movesListEl = document.getElementById("movesList");
+    const resetBtn = document.getElementById("resetBtn");
+    const undoBtn = document.getElementById("undoBtn");
+    const pieceBtn = document.getElementById("pieceBtn");
+    const hintBtn = document.getElementById("hintBtn");
+    const bestMoveBtn = document.getElementById("bestMoveBtn");
+    const modeBtn  = document.getElementById("modeBtn");
+    const moveSound = document.getElementById("moveSound");
+    const soundBtn = document.getElementById("soundBtn");
+    const flipBtn = document.getElementById("flipBtn");
+    const vsText = document.getElementById("vsText");
+    const coinValueEl = document.getElementById("coinValue");
+
+    // Intro / login buttons
+    const introOverlay    = document.getElementById("introOverlay");
+    const introFacebookBtn = document.getElementById("introFacebookBtn");
+    const introGoogleBtn   = document.getElementById("introGoogleBtn");
+    const introTwitterBtn  = document.getElementById("introTwitterBtn");
+
+    // Friends / invite
+    const roomCodeInput    = document.getElementById("roomCodeInput");
+    const createRoomBtn    = document.getElementById("createRoomBtn");
+    const inviteBtn        = document.getElementById("inviteBtn");
+    const inviteStatus     = document.getElementById("inviteStatus");
+    const voiceChatBtn     = document.getElementById("voiceChatBtn");
+    const chatBtn          = document.getElementById("chatBtn");
+    const videoChatBtn     = document.getElementById("videoChatBtn");
+
+    // Video
+    const videoOverlay     = document.getElementById("videoOverlay");
+    const localVideo       = document.getElementById("localVideo");
+    const closeVideoBtn    = document.getElementById("closeVideoBtn");
+
+    const game = new Chess();
+    let selectedSquare = null;
+    let lastMove = null;
+    let showHints = true;
+    let pieceStyle = "3d";
+    let isVsAI = false;
+    const aiColor = "b";
+    let aiThinking = false;
+    let isFlipped = false;
+    let soundOn = true;
+
+    // Bro Coin
+    let broCoins = 0;
+    function updateCoinUI(){
+      coinValueEl.textContent = broCoins;
+    }
+    function addBroCoins(amount){
+      broCoins += amount;
+      if(broCoins < 0) broCoins = 0;
+      updateCoinUI();
+    }
+
+    function fenToArray(fen){
+      const part = fen.split(" ")[0];
+      const rows = part.split("/");
+      const board = [];
+      rows.forEach(r=>{
+        const rowArr=[];
+        for(let ch of r){
+          if(!isNaN(ch)){
+            const empty = parseInt(ch,10);
+            for(let i=0;i<empty;i++) rowArr.push(".");
+          } else rowArr.push(ch);
+        }
+        board.push(rowArr);
+      });
+      return board;
+    }
+
+    function coordToSquare(row,col){
+      const file = String.fromCharCode("a".charCodeAt(0)+col);
+      const rank = 8-row;
+      return file+rank;
+    }
+
+    function clearHighlights(){
+      document.querySelectorAll(".square").forEach(sq=>{
+        sq.classList.remove("selected","last-move","hint-move","hint-capture","illegal");
+      });
+    }
+
+    function drawBoard(){
+      boardEl.innerHTML = "";
+      const matrix = fenToArray(game.fen());
+      const size = 12.5;
+
+      for(let row=0; row<8; row++){
+        for(let col=0; col<8; col++){
+          const sqDiv = document.createElement("div");
+          sqDiv.classList.add("square");
+          const dark = (row+col)%2 === 1;
+          sqDiv.classList.add(dark ? "dark" : "light");
+
+          const displayRow = isFlipped ? 7 - row : row;
+          const displayCol = isFlipped ? 7 - col : col;
+          sqDiv.style.left = (displayCol*size) + "%";
+          sqDiv.style.top  = (displayRow*size) + "%";
+
+          const square = coordToSquare(row,col);
+          sqDiv.dataset.square = square;
+
+          const piece = matrix[row][col];
+          if(piece !== "."){
+            if(pieceStyle === "3d" && pieceImages3D[piece]){
+              const img = document.createElement("img");
+              img.src = pieceImages3D[piece];
+              const isUpper = (piece === piece.toUpperCase());
+              img.classList.add("piece-img", isUpper ? "black-side" : "white-side");
+              sqDiv.appendChild(img);
+            } else {
+              const span = document.createElement("span");
+              span.textContent = PIECES_UNICODE[piece] || "";
+              span.classList.add("piece", piece === piece.toUpperCase() ? "white" : "black");
+              sqDiv.appendChild(span);
+            }
+          }
+
+          if(lastMove && (square === lastMove.from || square === lastMove.to)){
+            sqDiv.classList.add("last-move");
+          }
+
+          sqDiv.addEventListener("click", ()=> onSquareClick(square));
+          boardEl.appendChild(sqDiv);
+        }
+      }
+
+      updateStatus();
+      updateMovesList();
+    }
+
+    function updateMovesList(){
+      const hist = game.history();
+      if(!hist.length){
+        movesListEl.textContent = "No moves yet";
+        return;
+      }
+      movesListEl.innerHTML = "";
+      for(let i=0;i<hist.length;i+=2){
+        const row = document.createElement("div");
+        row.classList.add("move-row");
+        const idx = document.createElement("div");
+        idx.classList.add("move-index");
+        idx.textContent = (i/2+1) + ".";
+        const wSpan = document.createElement("div");
+        wSpan.textContent = hist[i] || "";
+        const bSpan = document.createElement("div");
+        bSpan.textContent = hist[i+1] || "";
+        row.appendChild(idx); row.appendChild(wSpan); row.appendChild(bSpan);
+        movesListEl.appendChild(row);
+      }
+    }
+
+    function evaluateMaterial(){
+      const boardArr = game.board();
+      let score = 0;
+      const values = { p:100, n:320, b:330, r:500, q:900, k:0 };
+      for(let row=0; row<8; row++){
+        for(let col=0; col<8; col++){
+          const piece = boardArr[row][col];
+          if(!piece) continue;
+          const val = values[piece.type] || 0;
+          if(piece.color === "w") score += val;
+          else score -= val;
+        }
+      }
+      return score;
+    }
+
+    function showBestMoveHint(){
+      if(game.game_over()) return;
+      const moves = game.moves({ verbose:true });
+      if(!moves.length) return;
+
+      const turnBefore = game.turn();
+      let bestMove = null;
+      let bestScore = (turnBefore === "w") ? -Infinity : Infinity;
+
+      for(const m of moves){
+        game.move(m);
+        const evalScore = evaluateMaterial();
+        game.undo();
+
+        if(turnBefore === "w"){
+          if(evalScore > bestScore){
+            bestScore = evalScore;
+            bestMove = m;
+          }
+        }else{
+          if(evalScore < bestScore){
+            bestScore = evalScore;
+            bestMove = m;
+          }
+        }
+      }
+
+      if(bestMove){
+        clearHighlights();
+        const fromEl = document.querySelector('.square[data-square="'+bestMove.from+'"]');
+        const toEl   = document.querySelector('.square[data-square="'+bestMove.to+'"]');
+        if(fromEl) fromEl.classList.add("selected");
+        if(toEl) toEl.classList.add("hint-move");
+        statusEl.textContent = statusEl.textContent.replace(/ • Best:.*$/,"");
+        statusEl.textContent += " • Best: " + bestMove.san;
+      }
+    }
+
+    bestMoveBtn.addEventListener("click", showBestMoveHint);
+
+    function updateStatus(){
+      let status = "";
+      const turnColor = game.turn() === "w" ? "White" : "Black";
+
+      if(game.in_checkmate()){
+        const winner = (turnColor === "White" ? "Black" : "White");
+        status = "Checkmate – " + winner + " wins";
+
+        // Bro Coin reward: jeet par +50
+        if(!game._broRewardGiven){
+          addBroCoins(50);
+          game._broRewardGiven = true;
+        }
+      } else if(game.in_draw()){
+        status = "Draw";
+      } else {
+        if(isVsAI){
+          if(game.turn() === "w") status = "Your move (White)";
+          else status = aiThinking ? "AI thinking..." : "AI move";
+        } else {
+          status = turnColor + " to move";
+        }
+        if(game.in_check()) status += " • Check!";
+      }
+
+      statusEl.textContent = status;
+    }
+
+    function showHintsForSquare(square){
+      if(!showHints) return;
+      if(isVsAI && game.turn() === aiColor) return;
+      const moves = game.moves({ square, verbose:true });
+      moves.forEach(m=>{
+        const sq = document.querySelector('.square[data-square="'+m.to+'"]');
+        if(!sq) return;
+        if(m.captured) sq.classList.add("hint-capture");
+        else sq.classList.add("hint-move");
+      });
+    }
+
+    function onSquareClick(square){
+      if(game.game_over()) return;
+      if(aiThinking) return;
+      if(isVsAI && game.turn() === aiColor) return;
+
+      const pieceOnClicked = game.get(square);
+
+      if(selectedSquare === square){
+        selectedSquare = null;
+        clearHighlights();
+        drawBoard();
+        return;
+      }
+
+      if(selectedSquare){
+        if(pieceOnClicked && pieceOnClicked.color === game.turn()){
+          selectedSquare = square;
+          clearHighlights();
+          drawBoard();
+          const sqDiv = document.querySelector('.square[data-square="'+square+'"]');
+          if(sqDiv) sqDiv.classList.add("selected");
+          showHintsForSquare(square);
+          return;
+        }
+
+        const moveAttempt = game.move({
+          from: selectedSquare,
+          to: square,
+          promotion: "q"
+        });
+
+        if(!moveAttempt){
+          const sqDiv = document.querySelector('.square[data-square="'+square+'"]');
+          if(sqDiv){
+            sqDiv.classList.add("illegal");
+            setTimeout(()=> sqDiv.classList.remove("illegal"), 200);
+          }
+          return;
+        }
+
+        if(soundOn){
+          try{
+            moveSound.currentTime = 0;
+            moveSound.play().catch(()=>{});
+          }catch(e){}
+        }
+
+        lastMove = { from: moveAttempt.from, to: moveAttempt.to };
+        selectedSquare = null;
+        clearHighlights();
+        drawBoard();
+
+        if(isVsAI && !game.game_over()){
+          aiMove();
+        }
+
+        return;
+      }
+
+      if(!pieceOnClicked || pieceOnClicked.color !== game.turn()) return;
+      selectedSquare = square;
+      clearHighlights();
+      drawBoard();
+      const sqDiv = document.querySelector('.square[data-square="'+square+'"]');
+      if(sqDiv) sqDiv.classList.add("selected");
+      showHintsForSquare(square);
+    }
+
+    function getRandomAIMove(){
+      const moves = game.moves({ verbose:true });
+      if(!moves.length) return null;
+
+      // simple: prefer captures if any
+      const captures = moves.filter(m => m.captured);
+      let choiceList = moves;
+      if(captures.length) choiceList = captures;
+
+      return choiceList[Math.floor(Math.random()*choiceList.length)];
+    }
+
+    function aiMove(){
+      aiThinking = true;
+      updateStatus();
+      setTimeout(()=>{
+        if(game.game_over()){ aiThinking=false; updateStatus(); return; }
+        const m = getRandomAIMove();
+        if(!m){ aiThinking=false; updateStatus(); return; }
+        game.move(m);
+        if(soundOn){
+          try{
+            moveSound.currentTime = 0;
+            moveSound.play().catch(()=>{});
+          }catch(e){}
+        }
+        lastMove = { from:m.from, to:m.to };
+        aiThinking = false;
+        clearHighlights();
+        drawBoard();
+      }, 300);
+    }
+
+    // Buttons
+    resetBtn.addEventListener("click", ()=>{
+      game.reset();
+      lastMove=null;
+      selectedSquare=null;
+      clearHighlights();
+      delete game._broRewardGiven;
+      drawBoard();
+    });
+
+    undoBtn.addEventListener("click", ()=>{
+      if(isVsAI){
+        game.undo(); // AI move
+        game.undo(); // human move
+      } else {
+        game.undo();
+      }
+      lastMove=null;
+      selectedSquare=null;
+      clearHighlights();
+      delete game._broRewardGiven;
+      drawBoard();
+    });
+
+    pieceBtn.addEventListener("click", () => {
+      pieceStyle = (pieceStyle === "3d") ? "unicode" : "3d";
+      pieceBtn.textContent = "Pieces: " + (pieceStyle === "3d" ? "3D" : "Text");
+      drawBoard();
+    });
+
+    hintBtn.addEventListener("click", ()=>{
+      showHints = !showHints;
+      hintBtn.textContent = "Hints: " + (showHints ? "ON" : "OFF");
+      clearHighlights();
+      drawBoard();
+    });
+
+    soundBtn.addEventListener("click", ()=>{
+      soundOn = !soundOn;
+      soundBtn.textContent = "Sound: " + (soundOn ? "ON" : "OFF");
+    });
+
+    flipBtn.addEventListener("click", ()=>{
+      isFlipped = !isFlipped;
+      drawBoard();
+    });
+
+    modeBtn.addEventListener("click", ()=>{
+      isVsAI = !isVsAI;
+      modeBtn.textContent = "Mode: " + (isVsAI ? "Vs Bot" : "2P");
+      vsText.textContent = isVsAI ? "You (White) vs Bot (Black)" : "Player 1 vs Player 2";
+      game.reset();
+      lastMove=null;
+      selectedSquare=null;
+      clearHighlights();
+      delete game._broRewardGiven;
+      drawBoard();
+    });
+
+    // Intro login handling
+    function hideIntro(){
+      introOverlay.style.display = "none";
+    }
+    function openSocial(url){
+      window.open(url,"_blank"); // nayi tab mein open
+      hideIntro();               // game screen dikhega
+    }
+    introFacebookBtn.addEventListener("click", ()=>{
+      openSocial("https://www.facebook.com/login.php");
+    });
+    introGoogleBtn.addEventListener("click", ()=>{
+      openSocial("https://accounts.google.com/signin");
+    });
+    introTwitterBtn.addEventListener("click", ()=>{
+      openSocial("https://twitter.com/i/flow/login");
+    });
+
+    // Friends / invite
+    if(createRoomBtn) createRoomBtn.addEventListener("click", ()=>{
+      let code = roomCodeInput.value.trim();
+      if(!code){
+        code = String(Math.floor(100000 + Math.random()*900000));
+        roomCodeInput.value = code;
+      }
+      inviteStatus.textContent = "Room ready: " + code + " • Friend ko yahi code bhejo.";
+    });
+    if(inviteBtn) inviteBtn.addEventListener("click", ()=>{
+      const code = roomCodeInput.value.trim();
+      if(!code){
+        inviteStatus.textContent = "Pehle room code likho ya Create dabao.";
+        return;
+      }
+      inviteStatus.textContent = "Code copy karke WhatsApp / Messenger par friend ko bhej sakte ho: " + code;
+    });
+
+    document.querySelectorAll(".inviteFriendBtn").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const name = btn.dataset.name || "Friend";
+        alert(name + " ko invite request bhej di (UI). Real online match ke liye baad mein server lagega.");
+      });
+    });
+
+    if(voiceChatBtn) voiceChatBtn.addEventListener("click", ()=>{
+      alert("Voice chat future update ke liye rakhi hai. Abhi sirf local game + UI chal raha hai.");
+    });
+
+    if(chatBtn) chatBtn.addEventListener("click", ()=>{
+      alert("Text chat ka UI ready hai. Real online messaging ke liye backend server add karna padega.");
+    });
+
+    // Video / camera
+    if(videoChatBtn) videoChatBtn.addEventListener("click", async ()=>{
+      videoOverlay.style.display = "flex";
+      try{
+        const stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false });
+        localVideo.srcObject = stream;
+      }catch(e){
+        alert("Camera open nahi ho paya. Permission allow karo ya device check karo.");
+      }
+    });
+    if(closeVideoBtn) closeVideoBtn.addEventListener("click", ()=>{
+      videoOverlay.style.display = "none";
+      const stream = localVideo.srcObject;
+      if(stream){
+        stream.getTracks().forEach(t=>t.stop());
+      }
+      localVideo.srcObject = null;
+    });
+
+    window.addEventListener("load", ()=>{
+      updateCoinUI();
+      drawBoard();
+    });
+    window.addEventListener("resize", ()=> drawBoard());
+  </script>
+</body>
+</html>
